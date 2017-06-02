@@ -28,11 +28,11 @@ class CurrentWeather {
             _date = ""
         }
         
-        let dateForatter = DateFormatter()
-        dateForatter.dateStyle = .medium
-        dateForatter.timeStyle = .none
-        let currentDate = dateForatter.string(from: Date())
-        self._date = "Today, \(currentDate)"
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+        let currentDate = dateFormatter.string(from: Date())
+        self._date = "Сегодня, \(currentDate)"
         
         return _date
     }
@@ -50,6 +50,7 @@ class CurrentWeather {
         }
         return _currentTemp
  }
+    
     
     func downloadWeatherDetails(completed: @escaping DownloadComplete) {
         //Alamofire download
@@ -71,9 +72,9 @@ class CurrentWeather {
                     }
                 }
                 
-                if let main = dict["main"] as? Dictionary<String, AnyObject> {
+                if let mainTemp = dict["main"] as? Dictionary<String, AnyObject> {
                     
-                    if let temp = main["temp"] as? Double {
+                    if let temp = mainTemp["temp"] as? Double {
                         
                         self._currentTemp = CurrentWeather.kelvinToCelseus(kelvin: temp)
                     }

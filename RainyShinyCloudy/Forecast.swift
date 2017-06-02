@@ -82,7 +82,7 @@ class Forecast {
 }
 
 extension Date {
-    func dayOfTheWeek()->String {
+    func dayOfTheWeek() -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEEE"
         

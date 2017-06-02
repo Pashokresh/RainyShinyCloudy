@@ -19,6 +19,7 @@ class WeatherVC: UIViewController, UITableViewDelegate, UITableViewDataSource, C
     @IBOutlet weak var currentWeatherTypeLabel: UILabel!
     @IBOutlet weak var tableView: UITableView!
     
+    var refreshControl: UIRefreshControl!
     let locationManager = CLLocationManager()
     var currentLocation: CLLocation!
     
@@ -30,44 +31,51 @@ class WeatherVC: UIViewController, UITableViewDelegate, UITableViewDataSource, C
         super.viewDidLoad()
         
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.requestWhenInUseAuthorization()
         locationManager.startMonitoringSignificantLocationChanges()
-
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        
         tableView.delegate = self
         tableView.dataSource = self
         
+        refreshControl = UIRefreshControl()
+        refreshControl.backgroundColor = UIColor.lightGray
+        refreshControl.addTarget(self, action: #selector(getWeatherInfo), for: .valueChanged)
+        tableView.addSubview(refreshControl)
         currentWeather = CurrentWeather()
     
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        locationAuthStatus()
+        
+        if CLLocationManager.authorizationStatus() == .authorizedWhenInUse {
+            locationAuthStatus()
+        } else {
+            locationManager.requestWhenInUseAuthorization()
+        }
+    }
+    
+    func getWeatherInfo() {
+        currentWeather.downloadWeatherDetails {
+            self.downloadForecastData {
+                self.updateMainUI()
+                self.tableView.reloadData()
+                if self.refreshControl.isRefreshing {self.refreshControl.endRefreshing()}
+                
+            }
+        }
     }
     
     func locationAuthStatus() {
         
         if CLLocationManager.authorizationStatus() == .authorizedWhenInUse {
-            
+            locationManager.startUpdatingLocation()
             currentLocation = locationManager.location
-            
-            print(currentLocation.coordinate.latitude, currentLocation.coordinate.longitude)
             
             Location.sharedInstance.latitude = currentLocation.coordinate.latitude
             Location.sharedInstance.longtitude = currentLocation.coordinate.longitude
             
-            currentWeather.downloadWeatherDetails {
-                self.downloadForecastData {
-                    self.updateMainUI()
-                    self.tableView.reloadData()
-                }
-            }
-            
-        } else {
-            
-            locationManager.requestWhenInUseAuthorization()
-            locationAuthStatus()
+            self.getWeatherInfo()
         }
     }
     
@@ -79,9 +87,9 @@ class WeatherVC: UIViewController, UITableViewDelegate, UITableViewDataSource, C
         Alamofire.request(forecastURL, method: .get).responseJSON { response in
             
             if let dict = response.result.value as? Dictionary<String, AnyObject> {
-
+                
                 if let list = dict["list"] as? [Dictionary<String, AnyObject>] {
-                    
+                    self.forecasts.removeAll()
                     for obj in list {
                         let forecast = Forecast(weatherDict: obj)
                         self.forecasts.append(forecast)
@@ -99,9 +107,6 @@ class WeatherVC: UIViewController, UITableViewDelegate, UITableViewDataSource, C
     }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        
-        
-        
         return forecasts.count
     }
     
@@ -119,18 +124,45 @@ class WeatherVC: UIViewController, UITableViewDelegate, UITableViewDataSource, C
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-
         self.tableView.deselectRow(at: indexPath, animated: false)
     }
     
     func updateMainUI() {
         
         dateLabel.text = currentWeather.date
-        currentTempLabel.text = "\(round(currentWeather.currentTemp) > 0 ? "+" : "")\(currentWeather.currentTemp)°C"
+        currentTempLabel.text = "\(Int(round(currentWeather.currentTemp)) > 0 ? "+" : "")\(Int(currentWeather.currentTemp))°C"
         locationLabel.text = currentWeather.cityName
         currentWeatherTypeLabel.text = currentWeather.weatherType
         currentWeatherImage.image = UIImage(named: currentWeather.weatherType)
         
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        if status == .authorizedWhenInUse {
+            locationManager.startUpdatingLocation()
+            locationAuthStatus()
+        } else if status == .denied {
+            let alert = UIAlertController(title: "Вы запретили определение местоположения", message: "Включите определение местоположения в настройках", preferredStyle: .alert)
+            let okAction = UIAlertAction(title: "Ок", style: .default, handler: { [weak self](_) in
+                self?.locationManager.requestWhenInUseAuthorization()
+                alert.dismiss(animated: true, completion: nil)
+                
+                guard let settingsURL = URL(string: UIApplicationOpenSettingsURLString) else {
+                    return
+                }
+                UIApplication.shared.openURL(settingsURL)
+            })
+            
+            alert.addAction(okAction)
+            self.present(alert, animated: true, completion: nil)
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let _ = locations.first {
+            
+            locationManager.stopUpdatingLocation()
+        }
     }
     
 }
